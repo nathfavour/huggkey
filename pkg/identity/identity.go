@@ -57,6 +57,11 @@ func FromMnemonic(mnemonic string) (*Identity, error) {
 	}, nil
 }
 
+// IsValidMnemonic checks if the mnemonic is valid.
+func IsValidMnemonic(mnemonic string) bool {
+	return bip39.IsMnemonicValid(mnemonic)
+}
+
 // FormatHuggID creates the hugg:v1:<base58> string.
 func FormatHuggID(pub *crypto.HybridPublicKey) string {
 	pkBytes := pub.Ed25519PublicKey()
