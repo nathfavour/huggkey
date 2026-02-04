@@ -21,6 +21,7 @@ var rootCmd = &cobra.Command{
 
 var (
 	passphrase string
+	remember   bool
 )
 
 var initCmd = &cobra.Command{
@@ -52,6 +53,14 @@ var initCmd = &cobra.Command{
 			}
 			password = string(bytePassword)
 			fmt.Println()
+		}
+
+		if remember {
+			if err := storage.StorePassphraseInKeyring(password); err != nil {
+				fmt.Printf("Warning: Could not save to keyring: %v\n", err)
+			} else {
+				fmt.Println("Passphrase saved to system keyring (Biometrics enabled).")
+			}
 		}
 
 		mnemonic, id, err := identity.CreateNewIdentity()
@@ -87,13 +96,19 @@ var whoamiCmd = &cobra.Command{
 
 		password := passphrase
 		if password == "" {
-			fmt.Print("Enter passphrase to unlock vault: ")
-			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+			// Try keyring first
+			password, err = storage.GetPassphraseFromKeyring()
 			if err != nil {
-				log.Fatalf("Failed to read password: %v", err)
+				fmt.Print("Enter passphrase to unlock vault: ")
+				bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+				if err != nil {
+					log.Fatalf("Failed to read password: %v", err)
+				}
+				password = string(bytePassword)
+				fmt.Println()
+			} else {
+				fmt.Println("Vault unlocked via system keyring.")
 			}
-			password = string(bytePassword)
-			fmt.Println()
 		}
 
 		mnemonic, err := storage.LoadVault(vaultPath, password)
@@ -183,13 +198,19 @@ var seedCmd = &cobra.Command{
 
 		password := passphrase
 		if password == "" {
-			fmt.Print("Enter passphrase to unlock vault: ")
-			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+			// Try keyring first
+			password, err = storage.GetPassphraseFromKeyring()
 			if err != nil {
-				log.Fatalf("Failed to read password: %v", err)
+				fmt.Print("Enter passphrase to unlock vault: ")
+				bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+				if err != nil {
+					log.Fatalf("Failed to read password: %v", err)
+				}
+				password = string(bytePassword)
+				fmt.Println()
+			} else {
+				fmt.Println("Vault unlocked via system keyring.")
 			}
-			password = string(bytePassword)
-			fmt.Println()
 		}
 
 		mnemonic, err := storage.LoadVault(vaultPath, password)
@@ -229,12 +250,16 @@ var burnCmd = &cobra.Command{
 			log.Fatalf("Failed to delete vault: %v", err)
 		}
 
+		// Also remove from keyring
+		_ = storage.DeletePassphraseFromKeyring()
+
 		fmt.Println("Identity successfully burned.")
 	},
 }
 
 func main() {
 	rootCmd.PersistentFlags().StringVarP(&passphrase, "passphrase", "p", "", "Passphrase for vault encryption/decryption")
+	rootCmd.PersistentFlags().BoolVarP(&remember, "remember", "r", false, "Save passphrase to system keyring (enables biometric/passwordless unlocking)")
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(whoamiCmd)
 	rootCmd.AddCommand(restoreCmd)
